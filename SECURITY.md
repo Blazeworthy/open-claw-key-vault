@@ -38,8 +38,10 @@ on-call rotation. Honestly:
 ## Already known — documented, not vulnerabilities
 
 These are properties of the design, covered in the README's "Known attack
-surface" section. Reports of them are welcome as discussion, but they aren't
-treated as new findings:
+surface" section and in **[THREAT-MODEL.md](THREAT-MODEL.md)** — which also
+explains why tool keys (Apify, Google Maps, Instantly) leak into model context
+more easily than LLM provider keys, and what actually prevents it. Reports of
+the following are welcome as discussion, but aren't treated as new findings:
 
 - **An agent with unrestricted shell/exec access can read the keys.** It runs
   as your user, so it can invoke this script or the OS credential tool
@@ -51,6 +53,10 @@ treated as new findings:
   query Keychain directly anyway. Documented in the README rather than hidden.
 - **Anyone who can write your `openclaw.json` or the script file can repoint
   the provider.** Keep both writable only by you.
+- **`get --print-secret` prints a key, and an agent can run it.** The flag is
+  an anti-footgun that makes the action deliberate, not a security boundary —
+  anything that can run this script can call the OS credential tool directly.
+  Documented as such in THREAT-MODEL.md.
 
 ## Verifying what you downloaded
 

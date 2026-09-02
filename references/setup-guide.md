@@ -96,7 +96,32 @@ Services that need **two credentials** (e.g. DataForSEO uses login +
 password): store two entries — `dataforseo-login` and `dataforseo-password`.
 One entry per value, clearly named, always.
 
-Test any key: `node secrets-provider.cjs get anthropic-api-key`
+Check a key stored correctly — **without printing it**:
+
+```
+node secrets-provider.cjs fingerprint anthropic-api-key
+  anthropic-api-key  sha256:9f2c4a1b8e05d773  (108 chars)
+
+node secrets-provider.cjs check anthropic-api-key   # exit 0 stored, 1 not
+```
+
+The fingerprint is a truncated hash — enough to confirm you stored the right
+key (compare it against the same key fingerprinted elsewhere, or just check
+the length matches your provider dashboard), never enough to recover it.
+
+There is also `get`, which prints the raw secret. It requires an explicit
+`--print-secret` flag, because if an agent or a CI job runs it, that key ends
+up in a transcript or log and rotating becomes the only fix. To use a key in a
+command **without** it entering an agent's context, let the shell resolve it:
+
+```
+TOKEN=$(node secrets-provider.cjs get apify-token --print-secret)
+curl -H "Authorization: Bearer $TOKEN" https://api.apify.com/v2/...
+```
+
+Only the literal `$(...)` text is ever logged. See
+[THREAT-MODEL.md](../THREAT-MODEL.md) for why this matters more for tool keys
+(Apify, Maps, Instantly) than for LLM provider keys.
 
 ## Step 4 — Point OpenClaw at the script
 
@@ -134,6 +159,9 @@ plaintext keys from the config.
   On a server, see the headless section above.
 - **OpenClaw refuses the provider script** — fix ownership/permissions:
   `chmod 700` and make sure the file is owned by the user OpenClaw runs as.
+- **"get prints the raw secret to stdout"** — `get` now needs an explicit
+  `--print-secret`. If you were only checking a key exists, use `check` or
+  `fingerprint` instead; they never emit the value.
 - **Windows: "Retrieve" errors** — the entry doesn't exist under resource
   `openclaw`. Check Credential Manager → Web Credentials, or just re-run
   the store command.
@@ -141,7 +169,10 @@ plaintext keys from the config.
 ## Uninstall / rotate
 
 Rotate: store the new value with the same name (store is an upsert), restart
-OpenClaw. Remove: `node secrets-provider.cjs delete <name>`.
+OpenClaw. Confirm the rotation landed with
+`node secrets-provider.cjs fingerprint <name>` — the hash changes when the
+value does, so you can verify without printing either key.
+Remove: `node secrets-provider.cjs delete <name>`.
 
 ---
 

@@ -20,7 +20,17 @@
  *   doctor           Check this machine can store/read/delete secrets.
  *   store <name>     Save a secret. Value is read from stdin, e.g.:
  *                      printf '%s' 'sk-xxxx' | node secrets-provider.cjs store my-key
- *   get <name>       Print a secret (for testing).
+ *   fingerprint <n>  Print a truncated sha256 and length of a stored
+ *                    secret — enough to confirm it's the right key,
+ *                    never enough to recover it.
+ *   check <name>     Exit 0 if the secret is stored, 1 if not. No output.
+ *   get <name>       Print the RAW secret. Requires --print-secret,
+ *                    because if an agent or CI job runs this, the key
+ *                    lands in a transcript or log and rotation is then
+ *                    the only remedy. To use a key without it entering an
+ *                    agent's context, let the shell resolve it:
+ *                      TOKEN=$(node secrets-provider.cjs get k --print-secret)
+ *                    See THREAT-MODEL.md.
  *   delete <name>    Remove a secret.
  *   help             Show this list.
  *
