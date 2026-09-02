@@ -194,6 +194,28 @@ action, and the release notes will say exactly what to do. This script
 will never check for updates or make any network call itself — that
 property is the point.
 
+## Using this as an agent skill
+
+This repo doubles as a **skill** for agent tools that read `SKILL.md`
+(Claude Code, Cowork, and similar). Point your agent tooling at this
+repository — or drop it into whatever directory your tool loads skills from —
+and the agent gains the key-handling policy in
+**[SKILL.md](SKILL.md)** alongside the script itself.
+
+What the agent picks up:
+
+- How to walk someone through setup, including the per-OS gotchas (macOS
+  Keychain prompt, `libsecret-tools` on Linux, WSL being Linux not Windows)
+- The rule that matters most: **never generate a command containing a literal
+  key value** — use `$(...)` substitution, and `fingerprint`/`check` instead of
+  `get`, so keys don't land in model context
+- Classifying every key as money-damage or reputation-damage, and refusing to
+  hand an agent raw send capability for the second kind
+
+You do not need the skill to use the script — it works fine on its own. The
+skill just means an agent gives consistent advice about keys instead of
+improvising.
+
 ## Getting help, and telling us what broke
 
 | What you've got | Where it goes |
