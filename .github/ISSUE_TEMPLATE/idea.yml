@@ -1,0 +1,24 @@
+name: Idea or improvement
+description: Suggest a change — but read the constraints first
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two things this project will never do, so you don't waste your time writing them up:
+        - **Add npm dependencies.** Zero dependencies is a security property, not a preference.
+        - **Make any network call.** Including update checks. That property is the point.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you change?
+    validations:
+      required: true

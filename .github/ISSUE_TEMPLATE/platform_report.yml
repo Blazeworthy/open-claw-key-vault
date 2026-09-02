@@ -1,0 +1,42 @@
+name: Platform report (it worked / it didn't)
+description: Tell us how it went on your OS — especially Windows and headless Linux, our least-tested paths
+labels: ["platform-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We publish honest per-platform status in the README. These reports are what keep it honest.
+        Successes are as useful as failures — they're how a path graduates from "written against the
+        docs" to "road-tested."
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Keychain)
+        - Windows (Credential Vault)
+        - Linux desktop (GNOME Keyring / KWallet)
+        - Linux headless / VPS
+        - WSL
+    validations:
+      required: true
+
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Worked end to end
+        - Worked after some fiddling (tell us what)
+        - Didn't work
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: OS version, what you ran, anything you had to install or change.
+    validations:
+      required: true

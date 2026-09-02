@@ -1,0 +1,55 @@
+name: Bug report
+description: Something doesn't work — a command fails, a key won't store, OpenClaw won't read it
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste a real API key, or any output containing one.**
+        `doctor` only ever uses a throwaway test secret, so its output is safe to share.
+        If you must show a value, replace it with `REDACTED`.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Keychain)
+        - Windows (Credential Vault)
+        - Linux desktop (GNOME Keyring / KWallet)
+        - Linux headless / VPS
+        - WSL
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: "Output of: node secrets-provider.cjs --version && node --version"
+      placeholder: "1.0.0 / v20.11.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`doctor` output"
+      description: "Paste the full output of: node secrets-provider.cjs doctor"
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected vs. what happened
+      description: Include the exact command you ran and the exact error text.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Custom KEY_VAULT_NAMESPACE, unusual keyring setup, locked-down machine, etc.

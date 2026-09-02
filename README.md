@@ -160,6 +160,26 @@ action, and the release notes will say exactly what to do. This script
 will never check for updates or make any network call itself — that
 property is the point.
 
+## Getting help, and telling us what broke
+
+| What you've got | Where it goes |
+|---|---|
+| **A security vulnerability** | **[Private advisory](https://github.com/Blazeworthy/open-claw-key-vault/security/advisories/new)** — never a public issue. See [SECURITY.md](SECURITY.md). |
+| A bug — command fails, key won't store | [Bug report](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=bug_report.yml) (include `doctor` output, never a real key) |
+| "It worked / didn't work on my OS" | [Platform report](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=platform_report.yml) — the most useful thing you can send us |
+| A question, or you're stuck in setup | [Discussions](https://github.com/Blazeworthy/open-claw-key-vault/discussions) |
+| An idea | [Idea](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=idea.yml) — read the two hard constraints first |
+
+**Platform reports are genuinely the thing we want most.** The README above
+tells you Windows is our least road-tested path and headless Linux needs care.
+That stays honest only if people tell us how it actually went — and a "worked
+fine on Windows 11" is as valuable as a failure, because it's how a path earns
+a status upgrade.
+
+Want to change something? [CONTRIBUTING.md](CONTRIBUTING.md) lists the hard
+constraints (zero dependencies, no network calls, no shell) before you spend
+time on a PR.
+
 ## About Blazeworthy
 
 Built and maintained by **[Blazeworthy](https://blazeworthy.com)** — we build
