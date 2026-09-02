@@ -73,8 +73,10 @@ Two honest caveats:
 
 - It does nothing against an agent that has been injected into printing
   the value on purpose. It is an anti-footgun, not a boundary.
-- The token appears briefly in `ps` argv — visible to same-uid processes
-  only, the same platform compromise documented for macOS in the README.
+- The token appears briefly in `ps` argv — not from this script, which
+  never puts a value on a command line, but from `curl` itself. Visible to
+  same-uid processes only, which could read the store directly anyway. Use
+  `curl --config` with a header file if even that matters to you.
 
 To make the footgun harder to trip, `get` refuses to run without an
 explicit `--print-secret`, and points you at the two commands that answer

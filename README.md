@@ -123,13 +123,15 @@ We assume you'll read the code — please do. The decisions you'll find:
 2. **No shell, anywhere.** macOS/Linux tools are invoked via `execFile`
    with argument arrays. Windows PowerShell runs `-NoProfile
    -NonInteractive` with only allowlisted identifiers in the command text.
-3. **Secret values stay off command lines** on Linux and Windows (stdin/
-   stdout of the credential tool only). On macOS, `security
-   add-generic-password` requires the value as an argument; macOS permits
-   reading argv only from same-uid processes (or root), which could query
-   Keychain regardless — so this adds no practical exposure on a
-   single-user agent machine. It's the one platform-imposed compromise,
-   documented rather than hidden.
+3. **Secret values never appear on a command line, on any platform.** They
+   travel through the credential tool's stdin only. macOS used to be the
+   exception; it no longer is. Passing `-w` with no value **as the final
+   option** makes `security(1)` prompt and read the value from stdin, which
+   its own help text documents ("Use of the -p or -w options is insecure.
+   Specify -w as the last option to be prompted."). Nothing reaches `ps`.
+   Values containing a line break are refused rather than silently mangled —
+   `find-generic-password -w` hex-encodes those, so they never round-tripped
+   correctly anyway.
 4. **Zero dependencies** — nothing to typosquat, nothing to patch, no
    postinstall scripts. Node stdlib + the OS tool.
 5. **`store` refuses TTY input** and takes values via stdin/hidden prompt

@@ -2,7 +2,7 @@
 /**
  * secrets-provider.cjs — Cross-platform secret provider for OpenClaw
  * ==================================================================
- * Version 1.1.2 · MIT License · zero npm dependencies
+ * Version 1.2.0 · MIT License · zero npm dependencies
  *
  * Stores your OpenClaw API keys in the operating system's built-in
  * encrypted credential store instead of plaintext config files:
@@ -46,8 +46,11 @@
  *      [A-Za-z0-9._-]{1,128}. They are the only externally influenced
  *      strings that reach an OS command, and the allowlist makes shell,
  *      argument, and PowerShell injection impossible by construction.
- *   2. Secret VALUES never appear on a command line on Linux or Windows:
- *      they travel via stdin/stdout of the credential tool only.
+ *   2. Secret VALUES never appear on a command line: every backend feeds
+ *      the value through the credential tool's stdin. On macOS this uses
+ *      security(1)'s documented "-w as the last option" prompt mode. The
+ *      only exception is a value containing a newline on macOS, which the
+ *      line-oriented prompt cannot carry; those use the argument form.
  *      On macOS, `security add-generic-password` requires the value as
  *      an argument. macOS only lets a process read the argv of processes
  *      with the SAME uid (or root) — and any same-uid process could ask
@@ -80,7 +83,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const run = promisify(execFile);
 
-const VERSION = '1.1.2';
+const VERSION = '1.2.0';
 
 /* Groups all entries this script owns inside the credential store.
  * Override with KEY_VAULT_NAMESPACE to run several isolated agents on
@@ -136,10 +139,27 @@ const macos = {
     return stdout.replace(/\n$/, '');
   },
   async set(name, value) {
-    /* -U = upsert. See SECURITY DESIGN §2 for why the value is an
-     * argument here and why that's acceptable on macOS specifically. */
-    await run(this.tool,
-      ['add-generic-password', '-U', '-a', NAMESPACE, '-s', name, '-w', value]);
+    /* -U = upsert.
+     *
+     * Giving -w NO value, as the final option, makes security(1) prompt for
+     * the password and read it from stdin — twice, for confirmation. That
+     * keeps the secret out of argv entirely, so it is never visible to `ps`
+     * or to any same-uid process sampling the process table.
+     *
+     * `security add-generic-password -h` documents this:
+     *   "Use of the -p or -w options is insecure. Specify -w as the last
+     *    option to be prompted."
+     *
+     * Multi-line values are rejected by checkValue before reaching here, so
+     * there is no argument-form fallback and the secret never touches argv
+     * on any code path. (Those values could not round-trip on macOS anyway:
+     * `find-generic-password -w` returns hex for data containing newlines.) */
+    await new Promise((resolve, reject) => {
+      const child = execFile(this.tool,
+        ['add-generic-password', '-U', '-a', NAMESPACE, '-s', name, '-w'],
+        (err) => (err ? reject(err) : resolve()));
+      child.stdin.end(value + '\n' + value + '\n'); // value, then retype
+    });
   },
   async del(name) {
     await run(this.tool,
@@ -269,6 +289,19 @@ async function getSecret(name) {
 
 function checkValue(value) {
   if (!value) fail('refusing to store an empty value.');
+  /* Rejected on every platform so behaviour is identical everywhere. macOS
+   * cannot round-trip these at all (find-generic-password -w returns hex for
+   * data containing newlines), and keeping values single-line is what lets
+   * every backend pass them via stdin instead of a command line. API keys,
+   * tokens and passwords are single-line by nature. */
+  if (/[\r\n]/.test(value)) {
+    fail('refusing to store a value containing a line break.\n' +
+         '  API keys and tokens are single-line. If you pasted a multi-line\n' +
+         '  block (a PEM private key, a JSON service account), store the\n' +
+         '  file path here and keep the file itself chmod 600 instead.\n' +
+         '  A stray trailing newline is stripped automatically — this means\n' +
+         '  a line break in the middle of the value.');
+  }
   if (Buffer.byteLength(value) > MAX_VALUE_BYTES) {
     fail(`value exceeds ${MAX_VALUE_BYTES} bytes — that is not an API key.`);
   }

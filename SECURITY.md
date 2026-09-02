@@ -48,9 +48,8 @@ the following are welcome as discussion, but aren't treated as new findings:
   directly. No same-user secret store defeats this. Removing or sandboxing
   exec access is the actual boundary.
 - **Malware running as your user can read the keys**, for the same reason.
-- **On macOS, `security add-generic-password` takes the value as an argument**,
-  so it's briefly visible in argv to same-uid processes. Those processes could
-  query Keychain directly anyway. Documented in the README rather than hidden.
+- **Reading a key out of the store as the user who owns it.** That is the
+  store working as designed; see the exec-access item above.
 - **Anyone who can write your `openclaw.json` or the script file can repoint
   the provider.** Keep both writable only by you.
 - **`get --print-secret` prints a key, and an agent can run it.** The flag is
