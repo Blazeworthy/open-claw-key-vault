@@ -13,6 +13,9 @@ operating system's built-in encrypted credential store:
 No npm packages. No accounts. No cloud. ~400 lines you can read yourself —
 and for a tool that handles your keys, you should.
 
+⭐ **Star this repo** if it's useful — it's how other OpenClaw users find it,
+and starred projects are the ones that get security review.
+
 ## Quick start (5 minutes, no dev experience needed)
 
 ```bash
@@ -156,6 +159,19 @@ means OpenClaw changed its provider protocol or a security fix needs
 action, and the release notes will say exactly what to do. This script
 will never check for updates or make any network call itself — that
 property is the point.
+
+## About Blazeworthy
+
+Built and maintained by **[Blazeworthy](https://blazeworthy.com)** — we build
+AI agent and automation systems for businesses, and we'd rather they didn't
+leak their API keys.
+
+If this tool saved you a rotation scramble, the best thanks is a
+⭐ **[star on GitHub](https://github.com/Blazeworthy/open-claw-key-vault)** or
+an issue telling us what broke on your platform. Both help more than you'd
+think — this is maintained in the open, for free.
+
+More from us at **[blazeworthy.com](https://blazeworthy.com)**.
 
 ## Disclaimer
 
