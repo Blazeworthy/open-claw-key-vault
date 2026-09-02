@@ -16,6 +16,9 @@ Use GitHub's private vulnerability reporting instead:
 Only maintainers can see it. You'll be credited in the fix release unless you
 ask not to be.
 
+Prefer email, or don't have a GitHub account? **security@blazeworthy.com**.
+Same expectations either way.
+
 Useful things to include: the platform, the version (`node secrets-provider.cjs
 --version`), what an attacker gains, and the smallest reproduction you have.
 Never include a real API key.

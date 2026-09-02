@@ -164,7 +164,7 @@ property is the point.
 
 | What you've got | Where it goes |
 |---|---|
-| **A security vulnerability** | **[Private advisory](https://github.com/Blazeworthy/open-claw-key-vault/security/advisories/new)** — never a public issue. See [SECURITY.md](SECURITY.md). |
+| **A security vulnerability** | **[Private advisory](https://github.com/Blazeworthy/open-claw-key-vault/security/advisories/new)** or **security@blazeworthy.com** — never a public issue. See [SECURITY.md](SECURITY.md). |
 | A bug — command fails, key won't store | [Bug report](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=bug_report.yml) (include `doctor` output, never a real key) |
 | "It worked / didn't work on my OS" | [Platform report](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=platform_report.yml) — the most useful thing you can send us |
 | A question, or you're stuck in setup | [Discussions](https://github.com/Blazeworthy/open-claw-key-vault/discussions) |
