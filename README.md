@@ -46,7 +46,7 @@ your `openclaw.json`. Restart OpenClaw, confirm it works, then delete the
 old plaintext keys from the config.
 
 Prefer commands? `node secrets-provider.cjs help` lists them
-(`doctor`, `store`, `get`, `delete`). Full walkthrough with per-OS notes
+(`doctor`, `store`, `fingerprint`, `check`, `get`, `delete`). Full walkthrough with per-OS notes
 and troubleshooting: [references/setup-guide.md](references/setup-guide.md).
 
 ## What this protects against — and what it doesn't
@@ -61,6 +61,22 @@ and troubleshooting: [references/setup-guide.md](references/setup-guide.md).
 - Malware already running *as your user* — it can ask the credential store
   too. Keep the agent machine clean and don't install unvetted plugins.
 - Bugs in OpenClaw itself leaking keys from memory or model context
+
+**The exposure most guides skip:** your LLM provider key is injected by
+OpenClaw into an HTTP header and never reaches the model — but *tool* keys
+(Apify, Google Maps, Instantly) are different, because the agent builds those
+requests itself. A key pasted into a command lands in the model's context and
+is resent every turn. **[THREAT-MODEL.md](THREAT-MODEL.md)** covers that in
+full, including the calling convention that avoids it:
+
+```bash
+TOKEN=$(node secrets-provider.cjs get apify-token --print-secret)
+curl -H "Authorization: Bearer $TOKEN" https://api.apify.com/v2/...
+```
+
+Only the literal `$(...)` text enters the transcript. To check a stored key
+without revealing it, use `fingerprint` (sha256 prefix + length) or `check`
+(exit 0/1) — which is why `get` now refuses to run without `--print-secret`.
 
 That second list is why storage is only half the practice. The other half:
 **one dedicated key per service, hard spend caps at every provider, and
@@ -184,6 +200,7 @@ property is the point.
 | **A security vulnerability** | **[Private advisory](https://github.com/Blazeworthy/open-claw-key-vault/security/advisories/new)** or **security@blazeworthy.com** — never a public issue. See [SECURITY.md](SECURITY.md). |
 | A bug — command fails, key won't store | [Bug report](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=bug_report.yml) (include `doctor` output, never a real key) |
 | "It worked / didn't work on my OS" | [Platform report](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=platform_report.yml) — the most useful thing you can send us |
+| A question about keys leaking into model context | Read [THREAT-MODEL.md](THREAT-MODEL.md) first — it probably covers it |
 | A question, or you're stuck in setup | [Discussions](https://github.com/Blazeworthy/open-claw-key-vault/discussions) |
 | An idea | [Idea](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=idea.yml) — read the two hard constraints first |
 

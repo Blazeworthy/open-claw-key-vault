@@ -2,7 +2,7 @@
 /**
  * secrets-provider.cjs — Cross-platform secret provider for OpenClaw
  * ==================================================================
- * Version 1.0.1 · MIT License · zero npm dependencies
+ * Version 1.1.0 · MIT License · zero npm dependencies
  *
  * Stores your OpenClaw API keys in the operating system's built-in
  * encrypted credential store instead of plaintext config files:
@@ -67,9 +67,10 @@
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const run = promisify(execFile);
 
-const VERSION = '1.0.1';
+const VERSION = '1.1.0';
 
 /* Groups all entries this script owns inside the credential store.
  * Override with KEY_VAULT_NAMESPACE to run several isolated agents on
@@ -410,6 +411,35 @@ async function setup() {
     `the old plaintext keys from your config. Done.\n`);
 }
 
+/* ── fingerprint / check ────────────────────────────────────────────────
+ * Most reasons to look at a stored secret are really "is it there?" and
+ * "is it the RIGHT one?" — neither needs the value. `get` prints the raw
+ * secret, and when an agent runs it that value lands in the model's
+ * context and every transcript and log downstream. These two commands
+ * answer the same questions without ever emitting the secret, so there
+ * is no longer a good reason to reach for `get`. */
+
+// Truncated SHA-256 of the value. Enough to compare two keys or match one
+// against a provider dashboard; not enough to recover it.
+function fingerprintOf(value) {
+  return 'sha256:' + crypto.createHash('sha256')
+    .update(value, 'utf8').digest('hex').slice(0, 16);
+}
+
+async function fingerprint(name) {
+  const value = await getSecret(name);
+  process.stdout.write(
+    `${name}  ${fingerprintOf(value)}  (${value.length} chars)\n`);
+}
+
+async function check(name) {
+  assertValidName(name);
+  try {
+    const value = await backend.get(name);
+    return Boolean(value);
+  } catch { return false; }
+}
+
 /* ── banner ─────────────────────────────────────────────────────────── */
 // Printed only by `help` and `setup`. Never on `get` or the provider
 // protocol path — those write to stdout and must stay machine-readable.
@@ -433,8 +463,13 @@ const HELP =
   `  node ${scriptName()} setup            guided setup (start here)\n` +
   `  node ${scriptName()} doctor           check this machine works\n` +
   `  node ${scriptName()} store <name>     save a secret (value via stdin)\n` +
-  `  node ${scriptName()} get <name>       print a secret (testing)\n` +
+  `  node ${scriptName()} fingerprint <n>  compare a key without revealing it\n` +
+  `  node ${scriptName()} check <name>     exit 0 if stored, 1 if not\n` +
+  `  node ${scriptName()} get <name>       print a secret (needs --print-secret)\n` +
   `  node ${scriptName()} delete <name>    remove a secret\n\n` +
+  ` Using a key without leaking it into an agent's context — let the shell\n` +
+  ` resolve it, so only the literal text below is ever logged:\n` +
+  `   TOKEN=$(node ${scriptName()} get <name> --print-secret)\n\n` +
   `With no command, speaks the OpenClaw exec-provider protocol on stdin.\n` +
   `Docs: see README.md and references/setup-guide.md\n`;
 
@@ -450,7 +485,34 @@ async function main() {
   if (cmd === 'setup') return setup();
   if (cmd === 'doctor') { if (!(await doctor())) process.exit(1); return; }
 
+  if (cmd === 'fingerprint') { await fingerprint(name); return; }
+
+  if (cmd === 'check') {
+    process.exit((await check(name)) ? 0 : 1);
+  }
+
   if (cmd === 'get') {
+    // `get` prints a live secret to stdout. If an agent runs it, that value
+    // enters the model's context and is resent on every later turn, written
+    // to transcripts, and shipped to whichever model provider is driving the
+    // loop — which may not be the provider that issued the key. Rotating is
+    // then the only real remedy, so make reaching for it deliberate.
+    // This is a guard against accident, NOT against an attacker: anything
+    // that can run this can call the OS credential tool directly.
+    if (process.argv[4] !== '--print-secret') {
+      fail(
+        `get prints the raw secret to stdout.\n\n` +
+        `  If something is capturing this output — an agent, a CI log, a\n` +
+        `  transcript — the key is now in it, and rotating is the only fix.\n\n` +
+        `  To confirm a key is stored and correct, use these instead:\n` +
+        `    node ${scriptName()} fingerprint ${name || '<name>'}   compare without revealing\n` +
+        `    node ${scriptName()} check ${name || '<name>'}         exit 0 if present, 1 if not\n\n` +
+        `  To use a key in a command without it entering an agent's context,\n` +
+        `  let the shell resolve it so only the literal text is logged:\n` +
+        `    TOKEN=$(node ${scriptName()} get <name> --print-secret)\n\n` +
+        `  If you really want the value on stdout, say so explicitly:\n` +
+        `    node ${scriptName()} get ${name || '<name>'} --print-secret`);
+    }
     process.stdout.write(await getSecret(name));
     return;
   }
