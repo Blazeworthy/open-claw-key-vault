@@ -27,8 +27,9 @@ operating system's built-in encrypted credential store:
 | Windows | Credential Vault (Credential Manager)      | No — ships with Windows 10/11|
 | Linux   | Secret Service (GNOME Keyring / KWallet)   | `sudo apt install libsecret-tools` |
 
-No npm packages. No accounts. No cloud. ~400 lines you can read yourself —
-and for a tool that handles your keys, you should.
+No npm packages. No accounts. No cloud. Around 570 lines — roughly 400 of
+code and the rest comments explaining *why* — so you can read the whole thing
+yourself. For a tool that handles your keys, you should.
 
 ⭐ **Star this repo** if it's useful — it's how other OpenClaw users find it,
 and starred projects are the ones that get security review.
@@ -148,7 +149,7 @@ is for.
 - **Windows**: written against Microsoft's documented PasswordVault API;
   the least road-tested path. Run `doctor` and report issues.
 - **Headless Linux servers**: keyrings need care there — read the
-  [Headless Linux section](references/setup-guide.md) before trusting it
+  [Headless Linux section](references/setup-guide.md#linux-headless-server--vps--read-this-honestly) before trusting it
   on a VPS. We'd rather tell you this than have you find out.
 
 ## FAQ

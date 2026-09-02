@@ -2,7 +2,7 @@
 /**
  * secrets-provider.cjs — Cross-platform secret provider for OpenClaw
  * ==================================================================
- * Version 1.1.0 · MIT License · zero npm dependencies
+ * Version 1.1.2 · MIT License · zero npm dependencies
  *
  * Stores your OpenClaw API keys in the operating system's built-in
  * encrypted credential store instead of plaintext config files:
@@ -80,7 +80,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const run = promisify(execFile);
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.2';
 
 /* Groups all entries this script owns inside the credential store.
  * Override with KEY_VAULT_NAMESPACE to run several isolated agents on
@@ -275,10 +275,16 @@ function checkValue(value) {
   /* Catch the classic novice mistake of storing the placeholder text. */
   const suspicious = /^<.*>$|your[-_ ]?(api[-_ ]?)?key|xxxx|paste/i;
   if (suspicious.test(value)) {
+    /* Deliberately does NOT echo any of the value. A false positive on a
+     * real key would otherwise print part of that key to stderr, which an
+     * agent or CI job could capture — the exact leak this tool exists to
+     * prevent. The fingerprint is safe to show; the value never is. */
     process.stderr.write(
-      `WARNING: the value you stored looks like placeholder text ` +
-      `("${value.slice(0, 24)}..."). If that was a mistake, run store again ` +
-      `with your real key — store overwrites.\n`);
+      `WARNING: that value matches a common placeholder pattern, so it may ` +
+      `be example text rather than your real key.\n` +
+      `  Stored fingerprint: ${fingerprintOf(value)} (${value.length} chars)\n` +
+      `  Compare it against your provider's dashboard. If it was a mistake, ` +
+      `run store again — store overwrites.\n`);
   }
 }
 
@@ -363,8 +369,7 @@ async function setup() {
   process.stdout.write(
     `\n` + BANNER +
     `\n guided setup\n` +
-    ` ────────────
-` +
+    ` ────────────\n` +
     `This stores your API keys in your computer's encrypted credential\n` +
     `store (${backend.label}) so they never sit in a plaintext file.\n\n` +
     `Step 1/3 — checking this machine...\n\n`);
@@ -484,7 +489,11 @@ const HELP =
   `Docs: see README.md and references/setup-guide.md\n`;
 
 async function main() {
-  const [, , cmd, name] = process.argv;
+  /* Parse flags position-independently so `get <name> --print-secret` and
+   * `get --print-secret <name>` both work. */
+  const argv = process.argv.slice(2);
+  const printSecret = argv.includes('--print-secret');
+  const [cmd, name] = argv.filter((a) => a !== '--print-secret');
 
   if (cmd === 'help' || cmd === '--help' || cmd === '-h') {
     process.stdout.write(HELP); return;
@@ -509,7 +518,7 @@ async function main() {
     // then the only real remedy, so make reaching for it deliberate.
     // This is a guard against accident, NOT against an attacker: anything
     // that can run this can call the OS credential tool directly.
-    if (process.argv[4] !== '--print-secret') {
+    if (!printSecret) {
       fail(
         `get prints the raw secret to stdout.\n\n` +
         `  If something is capturing this output — an agent, a CI log, a\n` +

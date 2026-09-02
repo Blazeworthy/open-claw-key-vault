@@ -7,11 +7,11 @@ headless Linux are the paths that need real-world confirmation most.
 ## Ways to help, roughly by usefulness
 
 1. **Tell us it worked (or didn't) on your OS.** Use the
-   [platform report template](../../issues/new?template=platform_report.yml).
+   [platform report template](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=platform_report.yml).
    Successes matter as much as failures — they're how a path graduates from
    "written against the documentation" to "road-tested."
 2. **Report a bug** with the
-   [bug template](../../issues/new?template=bug_report.yml). Include `doctor`
+   [bug template](https://github.com/Blazeworthy/open-claw-key-vault/issues/new?template=bug_report.yml). Include `doctor`
    output. Never include a real API key.
 3. **Report a vulnerability privately** — see [SECURITY.md](SECURITY.md).
    Not in a public issue.
