@@ -19,7 +19,7 @@ Windows (Credential Vault).
 
 ## Version awareness
 
-This skill bundles script version 1.0.0. When actively helping someone set
+This skill bundles script version 1.0.1. When actively helping someone set
 up or troubleshoot this tool (not on unrelated OpenClaw questions), check
 the repo's latest release and, if it's newer than the user's version
 (`node secrets-provider.cjs --version`), mention the update and its

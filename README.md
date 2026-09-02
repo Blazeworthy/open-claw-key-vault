@@ -199,9 +199,10 @@ time on a PR.
 
 ## About Blazeworthy
 
-Built and maintained by **[Blazeworthy](https://blazeworthy.com)** — we build
-AI agent and automation systems for businesses, and we'd rather they didn't
-leak their API keys.
+Built and maintained by **[Blazeworthy](https://blazeworthy.com)** — an online
+marketing and development agency. We build with AI agents in client work every
+day, and this came out of not wanting anyone's API keys sitting in a plaintext
+file.
 
 If this tool saved you a rotation scramble, the best thanks is a
 ⭐ **[star on GitHub](https://github.com/Blazeworthy/open-claw-key-vault)** or

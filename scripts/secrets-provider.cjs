@@ -2,7 +2,7 @@
 /**
  * secrets-provider.cjs — Cross-platform secret provider for OpenClaw
  * ==================================================================
- * Version 1.0.0 · MIT License · zero npm dependencies
+ * Version 1.0.1 · MIT License · zero npm dependencies
  *
  * Stores your OpenClaw API keys in the operating system's built-in
  * encrypted credential store instead of plaintext config files:
@@ -69,7 +69,7 @@ const { promisify } = require('node:util');
 const path = require('node:path');
 const run = promisify(execFile);
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 
 /* Groups all entries this script owns inside the credential store.
  * Override with KEY_VAULT_NAMESPACE to run several isolated agents on
@@ -350,8 +350,10 @@ async function setup() {
          'For scripted use, pipe values into the "store" command instead.');
   }
   process.stdout.write(
-    `\nOpenClaw Key Vault — guided setup\n` +
-    `=================================\n` +
+    `\n` + BANNER +
+    `\n guided setup\n` +
+    ` ────────────
+` +
     `This stores your API keys in your computer's encrypted credential\n` +
     `store (${backend.label}) so they never sit in a plaintext file.\n\n` +
     `Step 1/3 — checking this machine...\n\n`);
@@ -408,9 +410,26 @@ async function setup() {
     `the old plaintext keys from your config. Done.\n`);
 }
 
+/* ── banner ─────────────────────────────────────────────────────────── */
+// Printed only by `help` and `setup`. Never on `get` or the provider
+// protocol path — those write to stdout and must stay machine-readable.
+const BANNER =
+  ' \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588   \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588      \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588   \u2588\u2588\n' +
+  ' \u2588\u2588   \u2588\u2588 \u2588\u2588   \u2588\u2588 \u2588\u2588      \u2588\u2588\u2588  \u2588\u2588 \u2588\u2588      \u2588\u2588      \u2588\u2588   \u2588\u2588 \u2588\u2588   \u2588\u2588\n' +
+  ' \u2588\u2588   \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588   \u2588\u2588 \u2588 \u2588\u2588 \u2588\u2588      \u2588\u2588      \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588 \u2588 \u2588\u2588\n' +
+  ' \u2588\u2588   \u2588\u2588 \u2588\u2588      \u2588\u2588      \u2588\u2588  \u2588\u2588\u2588 \u2588\u2588      \u2588\u2588      \u2588\u2588   \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\n' +
+  ' \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588      \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588   \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588   \u2588\u2588 \u2588\u2588   \u2588\u2588\n' +
+  '\n' +
+  ' \u2588\u2588   \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588   \u2588\u2588     \u2588\u2588   \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588   \u2588\u2588 \u2588\u2588      \u2588\u2588\u2588\u2588\u2588\u2588\u2588\n' +
+  ' \u2588\u2588  \u2588\u2588  \u2588\u2588       \u2588\u2588 \u2588\u2588      \u2588\u2588   \u2588\u2588 \u2588\u2588   \u2588\u2588 \u2588\u2588   \u2588\u2588 \u2588\u2588         \u2588\u2588\n' +
+  ' \u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588     \u2588\u2588\u2588       \u2588\u2588   \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588   \u2588\u2588 \u2588\u2588         \u2588\u2588\n' +
+  ' \u2588\u2588  \u2588\u2588  \u2588\u2588         \u2588\u2588        \u2588\u2588 \u2588\u2588  \u2588\u2588   \u2588\u2588 \u2588\u2588   \u2588\u2588 \u2588\u2588         \u2588\u2588\n' +
+  ' \u2588\u2588   \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588         \u2588\u2588\u2588   \u2588\u2588   \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\n';
+
 /* ── entry point ────────────────────────────────────────────────────── */
 const HELP =
-  `secrets-provider ${VERSION} — encrypted key storage for OpenClaw\n\n` +
+  `\n` + BANNER +
+  `\n secrets-provider ${VERSION} — encrypted key storage for OpenClaw\n\n` +
   `  node ${scriptName()} setup            guided setup (start here)\n` +
   `  node ${scriptName()} doctor           check this machine works\n` +
   `  node ${scriptName()} store <name>     save a secret (value via stdin)\n` +
