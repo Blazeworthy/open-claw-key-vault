@@ -81,54 +81,146 @@ inside your WSL environment.
 
 ### Naming them
 
-One entry per **value**, named in lowercase-with-dashes. The name is the id
-OpenClaw will use to reference it, so pick it once and keep it:
+One entry per **value**. Use lowercase-with-dashes. The name is the id
+OpenClaw will reference, so choose it once and keep it:
 
-| Service | Store as | Notes |
-|---|---|---|
-| Anthropic | `anthropic-api-key` | |
-| OpenAI | `openai-api-key` | |
-| Apify | `apify-token` | |
-| Google Maps | `google-maps-api-key` | Restrict the key by IP + API at Google |
-| Instantly | `instantly-api-key` | Reputation-damage key — see THREAT-MODEL |
-| DataForSEO | `dataforseo-login` **and** `dataforseo-password` | Two values, two entries |
-| Anything with user + secret | `<service>-login`, `<service>-password` | Never combine into one entry |
+| Pattern | Use for |
+|---|---|
+| `<service>-api-key` | A single key or token |
+| `<service>-login` **and** `<service>-password` | Anything needing two values — never combine them into one entry |
+| `<service>-<purpose>-key` | A second key for the same service (staging vs production) |
 
-Names must match `[A-Za-z0-9._-]`, max 128 characters. Slashes are **not**
-allowed, so `providers/openai/apiKey` won't work here — use
-`openai-api-key` instead.
+Names may contain letters, digits, dot, dash and underscore, up to 128
+characters. Slashes are **not** allowed.
 
-### Storing them
+Throughout the rest of this guide:
 
-The value is read from stdin so it never lands in your shell history:
+- `<put name here>` — the name you chose above, e.g. what you'll type as the id
+- `<put api key here>` — the actual secret value from your provider
+
+### Adding a key — macOS
+
+**Option A — hidden prompt (recommended).** Nothing is typed as a command
+argument, so nothing lands in your shell history:
+
+1. Open **Terminal**.
+2. Change to wherever you put the script:
+   ```bash
+   cd ~
+   ```
+3. Run:
+   ```bash
+   node secrets-provider.cjs store <put name here> --prompt
+   ```
+4. At `Value for "<put name here>" (hidden, paste then Enter):` paste the key
+   and press **Enter**. **Nothing appears on screen while you paste — that is
+   intentional**, not a frozen terminal.
+5. You'll see `stored "<put name here>" in macOS Keychain.`
+6. The first time something *reads* a key, macOS shows a Keychain permission
+   dialog. Choose **Always Allow** on a dedicated agent machine so restarts
+   are unattended.
+
+**Option B — piped (for scripts).** The value is in the command, so it will be
+in your shell history unless you prefix the line with a space:
 
 ```bash
-printf '%s' 'sk-ant-your-real-key' | node secrets-provider.cjs store anthropic-api-key
-printf '%s' 'apify_api_your-real-token' | node secrets-provider.cjs store apify-token
+ printf '%s' '<put api key here>' | node secrets-provider.cjs store <put name here>
 ```
 
-Windows PowerShell:
+Wrap the value in **single quotes** so `$`, `!` and backslashes are taken
+literally. If the key itself contains a single quote, use Option A instead.
+
+**Option C — several keys at once:** `node secrets-provider.cjs setup` walks
+through them with hidden input and prints your config block at the end.
+
+### Adding a key — Linux
+
+First-time only, install the credential tool and confirm the keyring is
+unlocked:
+
+```bash
+sudo apt install libsecret-tools     # Debian/Ubuntu
+sudo dnf install libsecret           # Fedora
+node secrets-provider.cjs doctor     # expect RESULT: PASS
+```
+
+Then exactly as macOS:
+
+1. Open your terminal and `cd` to the script's directory.
+2. Hidden prompt (recommended):
+   ```bash
+   node secrets-provider.cjs store <put name here> --prompt
+   ```
+   Paste at the hidden prompt, press **Enter**. You'll see
+   `stored "<put name here>" in Linux Secret Service (GNOME Keyring / KWallet).`
+3. Or piped, for scripts (leading space keeps it out of history):
+   ```bash
+    printf '%s' '<put api key here>' | node secrets-provider.cjs store <put name here>
+   ```
+
+On a desktop the keyring unlocks when you log in. On a **headless server**
+read [the headless section](#linux-headless-server--vps--read-this-honestly)
+first — the guarantees are weaker there.
+
+### Adding a key — Windows
+
+Use **PowerShell**, not Command Prompt. `cmd.exe` mangles quoting and has no
+reliable way to pipe a value without leaving it in the command.
+
+1. Press **Win**, type `PowerShell`, open it.
+2. `cd` to the script's folder:
+   ```powershell
+   cd $HOME
+   ```
+3. Hidden prompt (recommended):
+   ```powershell
+   node secrets-provider.cjs store <put name here> --prompt
+   ```
+   Paste at the hidden prompt, press **Enter**. You'll see
+   `stored "<put name here>" in Windows Credential Vault.`
+4. Or piped, for scripts:
+   ```powershell
+   '<put api key here>' | node secrets-provider.cjs store <put name here>
+   ```
+   Use **single quotes** in PowerShell — double quotes would expand `$`.
+
+**Running OpenClaw inside WSL?** Then you are on Linux as far as this script
+is concerned. Install `libsecret-tools` inside WSL and follow the Linux steps
+there; keys stored in Windows are not visible to WSL, and vice versa.
+
+### If you set a namespace
+
+Running more than one agent on the machine? Whatever `KEY_VAULT_NAMESPACE` you
+put in the provider's `env` block (Step 4a) must also be set when you store,
+or the agent won't find the key:
+
+```bash
+KEY_VAULT_NAMESPACE=<put namespace here> node secrets-provider.cjs store <put name here> --prompt
+```
 
 ```powershell
-'sk-ant-your-real-key' | node secrets-provider.cjs store anthropic-api-key
+$env:KEY_VAULT_NAMESPACE='<put namespace here>'
+node secrets-provider.cjs store <put name here> --prompt
 ```
 
-Prefer not to have the key in your terminal at all? `node secrets-provider.cjs
-setup` prompts for each value with the input hidden.
+### What the script refuses, and why
 
-A trailing newline is stripped automatically. A line break *inside* the value
-is rejected — API keys are single-line, and this keeps the value off the
-command line on every platform. For a multi-line credential (a PEM key, a
-Google service-account JSON), store the **file path** here and keep the file
-itself `chmod 600`.
+- **Typing the value as a command argument without `--prompt`** — that puts
+  your key in shell history. The error message lists the three ways in.
+- **A value containing a line break** — API keys are single-line. For a
+  multi-line credential (PEM key, service-account JSON), store the **file
+  path** here and keep the file itself `chmod 600`.
+- **An empty value**, or a name with characters outside `A-Z a-z 0-9 . _ -`.
+
+A *trailing* newline is stripped for you, so `echo` works as well as `printf`.
 
 ### Confirming it worked — without printing the key
 
 ```bash
-node secrets-provider.cjs fingerprint anthropic-api-key
-  anthropic-api-key  sha256:9f2c4a1b8e05d773  (108 chars)
+node secrets-provider.cjs fingerprint <put name here>
+  <put name here>  sha256:9f2c4a1b8e05d773  (108 chars)
 
-node secrets-provider.cjs check anthropic-api-key   # exit 0 stored, 1 not
+node secrets-provider.cjs check <put name here>   # exit 0 stored, 1 not
 ```
 
 The fingerprint is a truncated hash: enough to tell two keys apart or confirm
@@ -140,8 +232,8 @@ explicit `--print-secret`. To *use* a key without it entering an agent's
 context, let the shell resolve it:
 
 ```bash
-TOKEN=$(node secrets-provider.cjs get apify-token --print-secret)
-curl -H "Authorization: Bearer $TOKEN" https://api.apify.com/v2/...
+TOKEN=$(node secrets-provider.cjs get <put name here> --print-secret)
+curl -H "Authorization: Bearer $TOKEN" https://api.example.com/v1/...
 ```
 
 Only the literal `$(...)` text is ever logged. See
@@ -205,7 +297,7 @@ entries stay separate — set it in `env`, and use the same value when storing:
 
 ```bash
 KEY_VAULT_NAMESPACE=openclaw-prod printf '%s' 'sk-...' \
-  | node secrets-provider.cjs store anthropic-api-key
+  | node secrets-provider.cjs store <put name here>
 ```
 
 ### 4b. Reference the secrets — what actually goes in the field
@@ -214,7 +306,7 @@ This is the part people get stuck on. Wherever the config used to hold a
 plaintext string, put a **SecretRef object** instead:
 
 ```json
-{ "source": "exec", "provider": "key-vault", "id": "anthropic-api-key" }
+{ "source": "exec", "provider": "key-vault", "id": "<put name here>" }
 ```
 
 - `source` — always `"exec"` for this script
@@ -227,8 +319,8 @@ plaintext string, put a **SecretRef object** instead:
 {
   "models": {
     "providers": {
-      "anthropic": {
-        "apiKey": "sk-ant-abc123..."
+      "<provider name>": {
+        "apiKey": "<put api key here>"
       }
     }
   }
@@ -241,11 +333,11 @@ plaintext string, put a **SecretRef object** instead:
 {
   "models": {
     "providers": {
-      "anthropic": {
+      "<provider name>": {
         "apiKey": {
           "source": "exec",
           "provider": "key-vault",
-          "id": "anthropic-api-key"
+          "id": "<put name here>"
         }
       }
     }
@@ -259,12 +351,12 @@ variables handed to an MCP server:
 ```json
 {
   "mcpServers": {
-    "apify": {
+    "<server name>": {
       "env": {
-        "APIFY_TOKEN": {
+        "<ENV_VAR_NAME>": {
           "source": "exec",
           "provider": "key-vault",
-          "id": "apify-token"
+          "id": "<put name here>"
         }
       }
     }
@@ -275,8 +367,8 @@ variables handed to an MCP server:
 Two-value services get two refs, pointing at the two entries you stored:
 
 ```json
-"username": { "source": "exec", "provider": "key-vault", "id": "dataforseo-login" },
-"password": { "source": "exec", "provider": "key-vault", "id": "dataforseo-password" }
+"username": { "source": "exec", "provider": "key-vault", "id": "<service>-login" },
+"password": { "source": "exec", "provider": "key-vault", "id": "<service>-password" }
 ```
 
 ## Step 5 — Verify, then delete the plaintext
@@ -318,8 +410,8 @@ that the namespace matches if you set one.
 `store` is an upsert — storing the same name again replaces the value:
 
 ```bash
-printf '%s' 'sk-ant-THE-NEW-KEY' | node secrets-provider.cjs store anthropic-api-key
-node secrets-provider.cjs fingerprint anthropic-api-key   # hash changes = it took
+node secrets-provider.cjs store <put name here> --prompt   # paste the NEW key
+node secrets-provider.cjs fingerprint <put name here>      # hash changes = it took
 openclaw secrets reload
 ```
 
@@ -341,8 +433,8 @@ node secrets-provider.cjs delete old-name
 ### Remove a key
 
 ```bash
-node secrets-provider.cjs delete apify-token
-node secrets-provider.cjs check apify-token    # exit 1 = gone
+node secrets-provider.cjs delete <put name here>
+node secrets-provider.cjs check <put name here>    # exit 1 = gone
 ```
 
 Remove its SecretRef from `openclaw.json` too, or resolution will fail on the
@@ -366,14 +458,17 @@ Default namespace is `openclaw`.
 ### Doing it by hand — macOS
 
 ```bash
-security find-generic-password -a openclaw -s apify-token          # show metadata
-security find-generic-password -a openclaw -s apify-token -w       # print value
-security add-generic-password -U -a openclaw -s apify-token -w     # prompts, no argv
-security delete-generic-password -a openclaw -s apify-token
+security find-generic-password -a openclaw -s <put name here>        # show metadata
+security find-generic-password -a openclaw -s <put name here> -w     # print value
+security add-generic-password -U -a openclaw -s <put name here> -w   # prompts you
+security delete-generic-password -a openclaw -s <put name here>
 ```
 
-Giving `-w` with no value **as the final option** makes `security` prompt
-instead of taking the secret on the command line. This script does the same.
+Giving `-w` with no value **as the final option** makes `security` prompt you
+to type the value, which is the safest way to add one **by hand**. It only
+works interactively: that prompt reads your terminal, not stdin, so it cannot
+be scripted — which is why the provider script passes the value as an argument
+on macOS instead (see the README's security notes).
 
 In Keychain Access, search the secret name, double-click, tick *Show
 password*. The **Access Control** tab is where "Always Allow" lives if you
@@ -382,9 +477,9 @@ want to change what you chose at the first prompt.
 ### Doing it by hand — Linux
 
 ```bash
-secret-tool lookup service apify-token account openclaw
-secret-tool store --label="openclaw apify-token" service apify-token account openclaw
-secret-tool clear service apify-token account openclaw
+secret-tool lookup service <put name here> account openclaw
+secret-tool store --label="openclaw <put name here>" service <put name here> account openclaw
+secret-tool clear service <put name here> account openclaw
 ```
 
 `store` reads the value from stdin and prompts if it's a terminal. In the
@@ -404,10 +499,10 @@ $v = New-Object Windows.Security.Credentials.PasswordVault
 $v.RetrieveByResource('openclaw') | Select-Object UserName
 
 # read one value
-$c = $v.Retrieve('openclaw','apify-token'); $c.RetrievePassword(); $c.Password
+$c = $v.Retrieve('openclaw','<put name here>'); $c.RetrievePassword(); $c.Password
 
 # remove one
-$v.Remove($v.Retrieve('openclaw','apify-token'))
+$v.Remove($v.Retrieve('openclaw','<put name here>'))
 ```
 
 In the GUI: **Control Panel → Credential Manager → Web Credentials**, look for

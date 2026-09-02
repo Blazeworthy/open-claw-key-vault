@@ -24,7 +24,7 @@ Windows (Credential Vault).
 
 ## Version awareness
 
-This skill bundles script version 1.2.0. When actively helping someone set
+This skill bundles script version 1.2.1. When actively helping someone set
 up or troubleshoot this tool (not on unrelated OpenClaw questions), check
 the repo's latest release and, if it's newer than the user's version
 (`node secrets-provider.cjs --version`), mention the update and its
@@ -41,7 +41,8 @@ deliberate security guarantee.
 Walk them through the setup guide's four steps in order: place the script
 (`chmod 700` on macOS/Linux — OpenClaw enforces this), run
 `node secrets-provider.cjs doctor`, store keys via stdin
-(`printf '%s' '<key>' | node secrets-provider.cjs store <name>`), then wire
+(`node secrets-provider.cjs store <name> --prompt` for hidden input, or
+`printf '%s' '<key>' | node secrets-provider.cjs store <name>` when scripting), then wire
 the exec provider into `openclaw.json` and only delete plaintext keys after a
 successful restart. Multi-credential services (e.g. DataForSEO's login +
 password) get one entry per value: `dataforseo-login`, `dataforseo-password`.

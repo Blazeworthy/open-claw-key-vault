@@ -47,7 +47,9 @@ your `openclaw.json`. Restart OpenClaw, confirm it works, then delete the
 old plaintext keys from the config.
 
 Prefer commands? `node secrets-provider.cjs help` lists them
-(`doctor`, `store`, `fingerprint`, `check`, `get`, `delete`). Full walkthrough with per-OS notes
+(`doctor`, `store`, `fingerprint`, `check`, `get`, `delete`). To add one key
+later: `node secrets-provider.cjs store <name> --prompt` prompts with hidden
+input so nothing lands in your shell history. Full walkthrough with per-OS notes
 and troubleshooting: [references/setup-guide.md](references/setup-guide.md).
 
 ## What this protects against — and what it doesn't
@@ -123,12 +125,15 @@ We assume you'll read the code — please do. The decisions you'll find:
 2. **No shell, anywhere.** macOS/Linux tools are invoked via `execFile`
    with argument arrays. Windows PowerShell runs `-NoProfile
    -NonInteractive` with only allowlisted identifiers in the command text.
-3. **Secret values never appear on a command line, on any platform.** They
-   travel through the credential tool's stdin only. macOS used to be the
-   exception; it no longer is. Passing `-w` with no value **as the final
-   option** makes `security(1)` prompt and read the value from stdin, which
-   its own help text documents ("Use of the -p or -w options is insecure.
-   Specify -w as the last option to be prompted."). Nothing reaches `ps`.
+3. **Secret values stay off command lines** on Linux and Windows (stdin of
+   the credential tool only). On macOS, `security add-generic-password` takes
+   the value as an argument. Its documented `-w`-as-last-option prompt reads
+   the *controlling terminal*, not stdin, so it cannot be driven
+   non-interactively — 1.2.0 shipped that as a "fix" and it broke storing in
+   any real terminal; 1.2.1 reverted it. macOS permits reading argv only from
+   same-uid processes (or root), which could query Keychain regardless, so
+   this adds no practical exposure on a single-user agent machine. It is the
+   one platform-imposed compromise, documented rather than hidden.
    Values containing a line break are refused rather than silently mangled —
    `find-generic-password -w` hex-encodes those, so they never round-tripped
    correctly anyway.

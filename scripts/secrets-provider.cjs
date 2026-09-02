@@ -2,7 +2,7 @@
 /**
  * secrets-provider.cjs — Cross-platform secret provider for OpenClaw
  * ==================================================================
- * Version 1.2.0 · MIT License · zero npm dependencies
+ * Version 1.2.1 · MIT License · zero npm dependencies
  *
  * Stores your OpenClaw API keys in the operating system's built-in
  * encrypted credential store instead of plaintext config files:
@@ -18,8 +18,10 @@
  *                    Checks your machine, stores your keys with hidden
  *                    input, and prints the exact openclaw.json config.
  *   doctor           Check this machine can store/read/delete secrets.
- *   store <name>     Save a secret. Value is read from stdin, e.g.:
- *                      printf '%s' 'sk-xxxx' | node secrets-provider.cjs store my-key
+ *   store <name>     Save a secret. Add --prompt for hidden interactive
+ *                    input, or pipe the value in for scripted use:
+ *                      node secrets-provider.cjs store my-key --prompt
+ *                      printf '%s' '<value>' | node secrets-provider.cjs store my-key
  *   fingerprint <n>  Print a truncated sha256 and length of a stored
  *                    secret — enough to confirm it's the right key,
  *                    never enough to recover it.
@@ -46,16 +48,15 @@
  *      [A-Za-z0-9._-]{1,128}. They are the only externally influenced
  *      strings that reach an OS command, and the allowlist makes shell,
  *      argument, and PowerShell injection impossible by construction.
- *   2. Secret VALUES never appear on a command line: every backend feeds
- *      the value through the credential tool's stdin — no exceptions and
- *      no fallback path, so nothing ever reaches `ps`.
- *      macOS used to be the exception here. It no longer is: passing -w
- *      with NO value, as the final option, makes security(1) prompt and
- *      read the value from stdin. Its own help text says so — "Use of the
- *      -p or -w options is insecure. Specify -w as the last option to be
- *      prompted." Values containing a line break are refused rather than
- *      stored via the argument form; find-generic-password -w hex-encodes
- *      such data, so they never round-tripped correctly anyway.
+ *   2. Secret VALUES never appear on a command line on Linux or Windows:
+ *      they travel via stdin of the credential tool only. macOS is the
+ *      exception — security(1) takes the value as an argument, and its
+ *      "-w as the last option" prompt mode reads the controlling terminal
+ *      rather than stdin, so it cannot be used non-interactively (see the
+ *      note on macos.set). macOS permits reading argv only from same-uid
+ *      processes (or root), which could query Keychain regardless, so this
+ *      adds no practical exposure on a single-user agent machine. It is the
+ *      one platform-imposed compromise, documented rather than hidden.
  *   3. All macOS/Linux invocations use execFile with argument arrays —
  *      no shell is ever involved. On Windows, PowerShell is invoked with
  *      -NoProfile -NonInteractive and only allowlisted identifiers are
@@ -81,7 +82,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const run = promisify(execFile);
 
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 
 /* Groups all entries this script owns inside the credential store.
  * Override with KEY_VAULT_NAMESPACE to run several isolated agents on
@@ -139,25 +140,25 @@ const macos = {
   async set(name, value) {
     /* -U = upsert.
      *
-     * Giving -w NO value, as the final option, makes security(1) prompt for
-     * the password and read it from stdin — twice, for confirmation. That
-     * keeps the secret out of argv entirely, so it is never visible to `ps`
-     * or to any same-uid process sampling the process table.
+     * The value is an argument here. That is deliberate, and 1.2.0 shipped a
+     * broken attempt to avoid it — recorded so nobody tries it again:
      *
-     * `security add-generic-password -h` documents this:
-     *   "Use of the -p or -w options is insecure. Specify -w as the last
-     *    option to be prompted."
+     *   `security add-generic-password -h` says "Specify -w as the last
+     *   option to be prompted", which looks like a way to feed the value on
+     *   stdin and keep it out of argv. It is not. security(1) reads that
+     *   prompt from the CONTROLLING TERMINAL, not from stdin. With no
+     *   controlling terminal (CI, a sandbox) it falls back to stdin and
+     *   appears to work; in any real user's terminal it prints "password
+     *   data for new item:" and hangs, ignoring the piped value. Spawning
+     *   detached (setsid) does not change this.
      *
-     * Multi-line values are rejected by checkValue before reaching here, so
-     * there is no argument-form fallback and the secret never touches argv
-     * on any code path. (Those values could not round-trip on macOS anyway:
-     * `find-generic-password -w` returns hex for data containing newlines.) */
-    await new Promise((resolve, reject) => {
-      const child = execFile(this.tool,
-        ['add-generic-password', '-U', '-a', NAMESPACE, '-s', name, '-w'],
-        (err) => (err ? reject(err) : resolve()));
-      child.stdin.end(value + '\n' + value + '\n'); // value, then retype
-    });
+     * So on macOS the value goes in argv. macOS lets only same-uid processes
+     * (or root) read another process's argv, and any same-uid process could
+     * ask Keychain for the entry directly anyway — so this adds no practical
+     * exposure on a single-user agent machine. It is the one platform-imposed
+     * compromise in this script, documented rather than hidden. */
+    await run(this.tool,
+      ['add-generic-password', '-U', '-a', NAMESPACE, '-s', name, '-w', value]);
   },
   async del(name) {
     await run(this.tool,
@@ -508,7 +509,8 @@ const HELP =
   `\n secrets-provider ${VERSION} — encrypted key storage for OpenClaw\n\n` +
   `  node ${scriptName()} setup            guided setup (start here)\n` +
   `  node ${scriptName()} doctor           check this machine works\n` +
-  `  node ${scriptName()} store <name>     save a secret (value via stdin)\n` +
+  `  node ${scriptName()} store <name> --prompt   save a secret (hidden input)\n` +
+  `  node ${scriptName()} store <name>            save a secret (value via stdin)\n` +
   `  node ${scriptName()} fingerprint <n>  compare a key without revealing it\n` +
   `  node ${scriptName()} check <name>     exit 0 if stored, 1 if not\n` +
   `  node ${scriptName()} get <name>       print a secret (needs --print-secret)\n` +
@@ -523,8 +525,10 @@ async function main() {
   /* Parse flags position-independently so `get <name> --print-secret` and
    * `get --print-secret <name>` both work. */
   const argv = process.argv.slice(2);
+  const FLAGS = ['--print-secret', '--prompt'];
   const printSecret = argv.includes('--print-secret');
-  const [cmd, name] = argv.filter((a) => a !== '--print-secret');
+  const usePrompt = argv.includes('--prompt');
+  const [cmd, name] = argv.filter((a) => !FLAGS.includes(a));
 
   if (cmd === 'help' || cmd === '--help' || cmd === '-h') {
     process.stdout.write(HELP); return;
@@ -568,13 +572,29 @@ async function main() {
   }
   if (cmd === 'store') {
     assertValidName(name);
-    if (process.stdin.isTTY) {
-      fail(`store reads the value from stdin so it stays out of shell\n` +
-           `history. Either pipe it:\n` +
+    /* Two ways in, both keeping the value off the command line:
+     *   --prompt : hidden interactive input, nothing in shell history
+     *   piped    : for scripted use
+     * Typing at a terminal WITHOUT --prompt is refused, because the obvious
+     * alternative — putting the value in the command — is the one thing we
+     * are trying to avoid. */
+    let value;
+    if (usePrompt) {
+      if (!process.stdin.isTTY) {
+        fail('--prompt needs a terminal. Piping? Drop the flag and the ' +
+             'value is read from stdin.');
+      }
+      value = (await promptHidden(`Value for "${name}" (hidden, paste then Enter): `))
+        .replace(/\r?\n$/, '');
+    } else if (process.stdin.isTTY) {
+      fail(`store will not read a secret typed as a command argument — that\n` +
+           `puts it in your shell history. Pick one:\n\n` +
+           `  node ${scriptName()} store ${name} --prompt     hidden prompt (easiest)\n` +
            `  printf '%s' '<value>' | node ${scriptName()} store ${name}\n` +
-           `or use the friendlier guided mode:  node ${scriptName()} setup`);
+           `  node ${scriptName()} setup                      guided, several keys`);
+    } else {
+      value = (await readStdin()).replace(/\r?\n$/, '');
     }
-    const value = (await readStdin()).replace(/\r?\n$/, '');
     checkValue(value);
     await backend.set(name, value);
     process.stderr.write(`stored "${name}" in ${backend.label}.\n`);
