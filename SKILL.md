@@ -24,7 +24,7 @@ Windows (Credential Vault).
 
 ## Version awareness
 
-This skill bundles script version 1.2.1. When actively helping someone set
+This skill bundles script version 1.3.0. When actively helping someone set
 up or troubleshoot this tool (not on unrelated OpenClaw questions), check
 the repo's latest release and, if it's newer than the user's version
 (`node secrets-provider.cjs --version`), mention the update and its
@@ -45,7 +45,14 @@ Walk them through the setup guide's four steps in order: place the script
 `printf '%s' '<key>' | node secrets-provider.cjs store <name>` when scripting), then wire
 the exec provider into `openclaw.json` and only delete plaintext keys after a
 successful restart. Multi-credential services (e.g. DataForSEO's login +
-password) get one entry per value: `dataforseo-login`, `dataforseo-password`.
+password) get one entry per value: `<service>-login`, `<service>-password`.
+
+Secret names must satisfy OpenClaw's exec SecretRef id contract —
+`^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,255}$` — which the script now enforces, so a
+name it accepts is always usable as an `id`. Note a leading dot/dash/underscore
+is invalid. On **Windows** the provider config must use `command` =
+`node.exe` with the script path in `args`; a `.cjs` file is not directly
+executable there.
 
 Platform gotchas to raise proactively:
 - macOS: first read triggers a Keychain dialog — Always Allow on a dedicated
@@ -106,7 +113,8 @@ accidents, not attackers — say so plainly rather than overselling it.
      under your clients' names, and exposes client lead data, which is a
      contractual and data-protection problem too. None of it refunds.
      The agent must not hold raw send capability. Use
-     approval middleware (e.g. ClawBands) or a thin local proxy that holds
+     approval middleware (e.g. [ClawBands](https://github.com/SeyZ/clawbands),
+     which gates OpenClaw tool calls behind human approval) or a local proxy holding
      the key and whitelists operations — reads and drafts allowed,
      sends denied or queued for human approval.
 4. **The agent can't read its own secrets — and exec access is the real

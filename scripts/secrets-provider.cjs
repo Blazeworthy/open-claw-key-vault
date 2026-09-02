@@ -2,7 +2,7 @@
 /**
  * secrets-provider.cjs — Cross-platform secret provider for OpenClaw
  * ==================================================================
- * Version 1.2.1 · MIT License · zero npm dependencies
+ * Version 1.3.0 · MIT License · zero npm dependencies
  *
  * Stores your OpenClaw API keys in the operating system's built-in
  * encrypted credential store instead of plaintext config files:
@@ -82,7 +82,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const run = promisify(execFile);
 
-const VERSION = '1.2.1';
+const VERSION = '1.3.0';
 
 /* Groups all entries this script owns inside the credential store.
  * Override with KEY_VAULT_NAMESPACE to run several isolated agents on
@@ -90,7 +90,17 @@ const VERSION = '1.2.1';
 const NAMESPACE = process.env.KEY_VAULT_NAMESPACE || 'openclaw';
 
 /* One allowlist governs every identifier that can reach an OS command. */
-const NAME_RE = /^[A-Za-z0-9._-]{1,128}$/;
+/* Deliberately identical to OpenClaw's exec SecretRef id contract, so a name
+ * this script accepts is always valid as an `id` in openclaw.json:
+ *   ^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,255}$
+ * Two consequences. A LEADING dot/dash/underscore is now rejected — OpenClaw
+ * rejects those too, so accepting them here only produced a confusing failure
+ * later, at config validation. And path-style ids (`providers/openai/apiKey`)
+ * and selector ids (`secret#json_key`) can now be stored, which the previous
+ * grammar refused even though they are OpenClaw's own idiom.
+ * Still no quote, backslash, space or control character — that is what keeps
+ * injection impossible by construction on every backend. */
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,255}$/;
 const MAX_VALUE_BYTES = 64 * 1024; // sanity cap; API keys are tiny
 
 const PLATFORM = process.platform; // 'darwin' | 'linux' | 'win32'
@@ -110,8 +120,11 @@ if (!NAME_RE.test(NAMESPACE)) {
 
 function assertValidName(name) {
   if (!NAME_RE.test(name || '')) {
-    fail(`invalid secret name "${name ?? ''}". Use only letters, digits, ` +
-         `dot, dash, underscore (max 128 chars), e.g. "anthropic-api-key".`);
+    fail(`invalid secret name "${name ?? ''}".\n` +
+         `  Must start with a letter or digit, then letters, digits, and any\n` +
+         `  of  . _ - : / #  (max 256 characters).\n` +
+         `  This is exactly OpenClaw's exec SecretRef id contract, so a name\n` +
+         `  accepted here is always valid as an "id" in openclaw.json.`);
   }
 }
 
@@ -372,7 +385,7 @@ async function doctor({ quiet = false } = {}) {
       `platform : ${PLATFORM} (${backend.label})\n` +
       `namespace: ${NAMESPACE}\n\n${backend.doctorHint}\n\n`);
   }
-  const probe = `__doctor_probe_${Date.now()}`;
+  const probe = `doctor-probe-${Date.now()}`;
   let ok = false;
   try {
     await backend.set(probe, 'ok');
@@ -479,12 +492,25 @@ async function fingerprint(name) {
     `${name}  ${fingerprintOf(value)}  (${value.length} chars)\n`);
 }
 
+/* Tri-state on purpose. Returning "absent" for a locked keyring or a missing
+ * credential tool would report a stored key as missing, which is exactly
+ * backwards when someone is using this to debug a failing SecretRef.
+ * Exit codes: 0 present, 1 absent, 2 backend failure. */
 async function check(name) {
   assertValidName(name);
   try {
-    const value = await backend.get(name);
-    return Boolean(value);
-  } catch { return false; }
+    return (await backend.get(name)) ? 0 : 1;
+  } catch (err) {
+    const detail = (err.stderr || err.message || '').toString().trim();
+    if (/not\s*(be\s*)?found|could not be found|No such|does not exist|Element not found/i
+        .test(detail)) {
+      return 1;   // genuinely absent
+    }
+    process.stderr.write(
+      `check: could not reach ${backend.label} — this is NOT the same as ` +
+      `"${name}" being absent.\n  ${detail}\n`);
+    return 2;     // backend problem
+  }
 }
 
 /* ── banner ─────────────────────────────────────────────────────────── */
@@ -512,7 +538,7 @@ const HELP =
   `  node ${scriptName()} store <name> --prompt   save a secret (hidden input)\n` +
   `  node ${scriptName()} store <name>            save a secret (value via stdin)\n` +
   `  node ${scriptName()} fingerprint <n>  compare a key without revealing it\n` +
-  `  node ${scriptName()} check <name>     exit 0 if stored, 1 if not\n` +
+  `  node ${scriptName()} check <name>     exit 0 stored, 1 absent, 2 backend\n` +
   `  node ${scriptName()} get <name>       print a secret (needs --print-secret)\n` +
   `  node ${scriptName()} delete <name>    remove a secret\n\n` +
   ` Using a key without leaking it into an agent's context — let the shell\n` +
@@ -542,7 +568,7 @@ async function main() {
   if (cmd === 'fingerprint') { await fingerprint(name); return; }
 
   if (cmd === 'check') {
-    process.exit((await check(name)) ? 0 : 1);
+    process.exit(await check(name));
   }
 
   if (cmd === 'get') {
@@ -616,9 +642,25 @@ async function main() {
   catch { fail('stdin was not valid JSON (expected an OpenClaw provider request).'); }
   if (!Array.isArray(req.ids)) fail('request has no "ids" array.');
 
+  /* Protocol v1 supports per-id errors. Failing the whole batch on one
+   * missing id would take down every owner in the request, defeating
+   * OpenClaw's per-owner isolation — so resolve each id independently and
+   * report the failures alongside the successes. */
   const values = {};
-  for (const id of req.ids) values[id] = await getSecret(id);
-  process.stdout.write(JSON.stringify({ protocolVersion: 1, values }));
+  const errors = {};
+  for (const id of req.ids) {
+    try {
+      values[id] = await getSecret(id);
+    } catch (err) {
+      errors[id] = { code: 'NOT_FOUND' };
+      /* Detail goes to stderr, never into the JSON: resolver output can
+       * contain credential material and OpenClaw does not display it. */
+      process.stderr.write(`${(err.message || err).toString().trim()}\n`);
+    }
+  }
+  const res = { protocolVersion: 1, values };
+  if (Object.keys(errors).length) res.errors = errors;
+  process.stdout.write(JSON.stringify(res));
 }
 
 main().catch((err) => fail(err.message));

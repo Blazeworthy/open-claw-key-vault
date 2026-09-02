@@ -90,8 +90,15 @@ OpenClaw will reference, so choose it once and keep it:
 | `<service>-login` **and** `<service>-password` | Anything needing two values — never combine them into one entry |
 | `<service>-<purpose>-key` | A second key for the same service (staging vs production) |
 
-Names may contain letters, digits, dot, dash and underscore, up to 128
-characters. Slashes are **not** allowed.
+**Name rules.** A name must start with a letter or digit, then may contain
+letters, digits and any of `.` `_` `-` `:` `/` `#`, up to 256 characters.
+
+This is deliberately *identical* to OpenClaw's exec SecretRef `id` contract
+(`^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,255}$`), so anything this script accepts is
+valid as an `id` in `openclaw.json` — no storing a name that OpenClaw later
+refuses. Path-style names like `providers/openai/apiKey` work if you prefer
+OpenClaw's own idiom. A **leading** dot, dash or underscore is rejected,
+because OpenClaw rejects it too.
 
 Throughout the rest of this guide:
 
@@ -220,7 +227,7 @@ A *trailing* newline is stripped for you, so `echo` works as well as `printf`.
 node secrets-provider.cjs fingerprint <put name here>
   <put name here>  sha256:9f2c4a1b8e05d773  (108 chars)
 
-node secrets-provider.cjs check <put name here>   # exit 0 stored, 1 not
+node secrets-provider.cjs check <put name here>   # 0 stored, 1 absent, 2 store unreachable
 ```
 
 The fingerprint is a truncated hash: enough to tell two keys apart or confirm
@@ -264,6 +271,38 @@ In `openclaw.json`:
 ```
 
 `key-vault` is a name you choose — it's what you'll put in `provider` below.
+Provider names must match `^[a-z][a-z0-9_-]{0,63}$`.
+
+**On Windows, that config will not work — use `node.exe` plus `args`.**
+OpenClaw runs `command` as a binary directly, with no shell, and Windows has
+no shebang support, so a `.cjs` file cannot be executed on its own. Point
+`command` at Node and pass the script as an argument:
+
+```json
+{
+  "secrets": {
+    "providers": {
+      "key-vault": {
+        "source": "exec",
+        "command": "C:\\Program Files\\nodejs\\node.exe",
+        "args": ["C:\\Users\\<you>\\secrets-provider.cjs"],
+        "timeoutMs": 5000
+      }
+    }
+  }
+}
+```
+
+Find your Node path with `where.exe node`. On macOS and Linux the direct form
+above works because the script carries a `#!/usr/bin/env node` shebang and
+Step 1 made it executable — but if you prefer, the `command` + `args` form
+works there too. One caveat if you use it: `command` must not be a symlink,
+and Node installed via Homebrew, nvm or a package manager usually *is* one.
+Resolve the real path first:
+
+```bash
+realpath "$(command -v node)"
+```
 
 OpenClaw validates the script before running it. `command` **must not be a
 symlink**, must **not be group- or world-writable**, and on macOS/Linux must
@@ -276,7 +315,7 @@ Options you can add, with their defaults:
 | Option | Default | Use it when |
 |---|---|---|
 | `timeoutMs` | `5000` | A slow keyring unlock needs longer |
-| `noOutputTimeoutMs` | `5000` | Same, for the first byte of output |
+| `noOutputTimeoutMs` | same as `timeoutMs` | Same, for the first byte of output |
 | `maxOutputBytes` | 1 MiB | Rarely — responses here are tiny |
 | `args` | — | Extra CLI args for the script |
 | `env` | — | Set a variable for the script, e.g. the namespace |
@@ -350,19 +389,33 @@ variables handed to an MCP server:
 
 ```json
 {
-  "mcpServers": {
-    "<server name>": {
-      "env": {
-        "<ENV_VAR_NAME>": {
-          "source": "exec",
-          "provider": "key-vault",
-          "id": "<put name here>"
+  "plugins": {
+    "entries": {
+      "acpx": {
+        "enabled": true,
+        "config": {
+          "mcpServers": {
+            "<server name>": {
+              "command": "npx",
+              "args": ["-y", "<the mcp server package>"],
+              "env": {
+                "<ENV_VAR_NAME>": {
+                  "source": "exec",
+                  "provider": "key-vault",
+                  "id": "<put name here>"
+                }
+              }
+            }
+          }
         }
       }
     }
   }
 }
 ```
+
+Note the nesting: MCP server env vars live under
+`plugins.entries.acpx.config.mcpServers`, not at the top level.
 
 Two-value services get two refs, pointing at the two entries you stored:
 
@@ -375,7 +428,18 @@ Two-value services get two refs, pointing at the two entries you stored:
 
 **Order matters. Do not delete the plaintext keys first.**
 
-1. Load the new config:
+1. Check the provider path is trusted, without running anything:
+
+   ```bash
+   openclaw config validate
+   ```
+
+   This verifies every exec `command` path (not a symlink, correct ownership
+   and permissions) without executing providers. It is a path-trust check,
+   not proof the provider returns a secret — but it catches the most common
+   Step 4 mistake before anything else runs.
+
+2. Load the new config:
 
    ```bash
    openclaw secrets reload
@@ -384,7 +448,7 @@ Two-value services get two refs, pointing at the two entries you stored:
    Secrets resolve into an in-memory snapshot at startup and on reload, so a
    full restart works too — `reload` just avoids one.
 
-2. Confirm every reference resolves and nothing plaintext is left:
+3. Confirm every reference resolves and nothing plaintext is left:
 
    ```bash
    openclaw secrets audit --allow-exec
@@ -394,14 +458,27 @@ Two-value services get two refs, pointing at the two entries you stored:
    `--allow-exec` lets the audit actually run exec providers. The `--check`
    form is what you'd put in a pre-commit hook or CI.
 
-3. Exercise the agent on something that uses each key.
+4. Exercise the agent on something that uses each key.
 
-4. **Only now** remove the plaintext values from `openclaw.json`, then reload
+5. **Only now** remove the plaintext values from `openclaw.json`, then reload
    and audit once more.
 
+   Plaintext keeps working in OpenClaw — SecretRefs are opt-in per credential
+   — so nothing forces this step. `secrets audit --check` reporting clean is
+   how you know you actually finished.
+
 If a reference fails to resolve, OpenClaw reports the id it couldn't get.
-Check the name matches exactly (`node secrets-provider.cjs check <id>`) and
-that the namespace matches if you set one.
+Check the name matches exactly and that the namespace matches if you set one:
+
+```bash
+node secrets-provider.cjs check <put name here>
+#   exit 0 = stored      exit 1 = not stored
+#   exit 2 = the credential store itself could not be reached
+```
+
+Exit 2 matters: a locked keyring or a missing `secret-tool` is a different
+problem from a missing key, and this tells them apart instead of reporting
+both as absent.
 
 ## Managing your keys afterwards
 
