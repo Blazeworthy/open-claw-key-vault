@@ -47,17 +47,15 @@
  *      strings that reach an OS command, and the allowlist makes shell,
  *      argument, and PowerShell injection impossible by construction.
  *   2. Secret VALUES never appear on a command line: every backend feeds
- *      the value through the credential tool's stdin. On macOS this uses
- *      security(1)'s documented "-w as the last option" prompt mode. The
- *      only exception is a value containing a newline on macOS, which the
- *      line-oriented prompt cannot carry; those use the argument form.
- *      On macOS, `security add-generic-password` requires the value as
- *      an argument. macOS only lets a process read the argv of processes
- *      with the SAME uid (or root) — and any same-uid process could ask
- *      Keychain for the entry anyway once access is granted — so this
- *      adds no practical exposure on a single-user agent machine. It is
- *      still the one platform-imposed compromise in this script, and we
- *      would rather document it than hide it.
+ *      the value through the credential tool's stdin — no exceptions and
+ *      no fallback path, so nothing ever reaches `ps`.
+ *      macOS used to be the exception here. It no longer is: passing -w
+ *      with NO value, as the final option, makes security(1) prompt and
+ *      read the value from stdin. Its own help text says so — "Use of the
+ *      -p or -w options is insecure. Specify -w as the last option to be
+ *      prompted." Values containing a line break are refused rather than
+ *      stored via the argument form; find-generic-password -w hex-encodes
+ *      such data, so they never round-tripped correctly anyway.
  *   3. All macOS/Linux invocations use execFile with argument arrays —
  *      no shell is ever involved. On Windows, PowerShell is invoked with
  *      -NoProfile -NonInteractive and only allowlisted identifiers are
